@@ -90,16 +90,25 @@ namespace Mar0739ORM
                         switch (action)
                         {
                             case 1:
+                                Console.WriteLine("Zadejte datum ve tvaru YYYY-MM-DD");
+                                string date = Console.ReadLine();
                                 Reservation testReserv = new Reservation()
                                 {
                                     AddInfo = "Ahojda jak je",
-                                    Date = new DateTime(2022, 1, 5),
+                                    Date = Convert.ToDateTime(date),
                                     Game = GameRepository.FindGame(1),
                                     Length = 55,
                                     State = "K potvrzení",
                                     User = UserRepository.FindUserById(1)
                                 };
-                                ReservationRepository.CreateReservation(testReserv);
+                                try
+                                {
+                                    ReservationRepository.CreateReservation(testReserv);
+                                }
+                                catch(Exception e)
+                                {
+                                    Console.WriteLine("Rezervace v tomto datu existuje");
+                                }
                                 break;
                             case 2:
                                 List<Reservation> res = new List<Reservation>();
@@ -180,6 +189,29 @@ namespace Mar0739ORM
                                 }
                                 break;
                             case 7:
+                                Console.WriteLine("--------USER RECIEPTS BEFORE FUNC----");
+                                var reciepts = RecieptRepository.GetRecieptsForUser(new User() { Id = 1 });
+                                foreach (var notpaidReciept in reciepts)
+                                {
+                                    foreach (PropertyDescriptor descriptor in TypeDescriptor.GetProperties(notpaidReciept))
+                                    {
+                                        string name = descriptor.Name;
+                                        object value = descriptor.GetValue(notpaidReciept);
+                                        Console.WriteLine("{0}={1}", name, value);
+                                    }
+                                }
+                                ReservationRepository.CheckNotPaidReservations();
+                                Console.WriteLine("--------USER RECIEPTS AFTER FUNC----");
+                                reciepts = RecieptRepository.GetRecieptsForUser(new User() { Id = 1 });
+                                foreach (var notpaidReciept in reciepts)
+                                {
+                                    foreach (PropertyDescriptor descriptor in TypeDescriptor.GetProperties(notpaidReciept))
+                                    {
+                                        string name = descriptor.Name;
+                                        object value = descriptor.GetValue(notpaidReciept);
+                                        Console.WriteLine("{0}={1}", name, value);
+                                    }
+                                }
                                 break;
                             case 8:
                                 currRest = ReservationRepository.FindAllReservations();
@@ -349,7 +381,7 @@ namespace Mar0739ORM
                         {
                             case 1:
                                 var reqs = RequirementRepository.FindAllRequirements();
-                                foreach(var req in reqs)
+                                foreach (var req in reqs)
                                 {
                                     foreach (PropertyDescriptor descriptor in TypeDescriptor.GetProperties(req))
                                     {
@@ -422,7 +454,7 @@ namespace Mar0739ORM
                                     Price = 500,
                                     State = "K zaplacení",
                                     User = UserRepository.FindUserById(1),
-                                    Stock = StockRepository.FindAllStock().Select(x => x).Where(x =>x.Id == 1).FirstOrDefault()
+                                    Stock = StockRepository.FindAllStock().Select(x => x).Where(x => x.Id == 1).FirstOrDefault()
                                 };
                                 RecieptRepository.CreateReciept(newReciept);
                                 break;
@@ -439,12 +471,13 @@ namespace Mar0739ORM
                         Console.WriteLine("Update all - 3");
                         Console.WriteLine("Stock count check - 4");
                         Console.WriteLine("Delete - 5");
+                        Console.WriteLine("Emails for low stock - 6");
                         action = Convert.ToInt32(Console.ReadLine());
                         switch (action)
                         {
                             case 1:
                                 var stock = StockRepository.FindAllStock();
-                                foreach(var sto in stock)
+                                foreach (var sto in stock)
                                 {
                                     foreach (PropertyDescriptor descriptor in TypeDescriptor.GetProperties(sto))
                                     {
@@ -499,6 +532,14 @@ namespace Mar0739ORM
                                 Console.WriteLine("Zadejte id polozky ke smazani");
                                 var stockId = Convert.ToInt32(Console.ReadLine());
                                 StockRepository.DeleteStockById(stockId);
+                                break;
+                            case 6:
+                                var ems = StockRepository.GetEmailToSendForLowStock(3, "jaja");
+                                Console.WriteLine("Email ids to send:");
+                                foreach(var em in ems)
+                                {
+                                    Console.WriteLine(em);
+                                }
                                 break;
                         }
                         break;

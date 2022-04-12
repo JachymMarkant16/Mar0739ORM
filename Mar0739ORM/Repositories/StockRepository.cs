@@ -16,7 +16,7 @@ namespace ProjektDB.ORM
             DBConnection db = new DBConnection();
 
             db.Connect();
-            SqlCommand cmd = new SqlCommand("SELECT * FROM [dbo].[user]", db.connection); //
+            SqlCommand cmd = new SqlCommand("SELECT * FROM [dbo].[stock]", db.connection); //
             SqlDataReader reader = cmd.ExecuteReader();
 
             while (reader.Read())
@@ -86,6 +86,80 @@ namespace ProjektDB.ORM
             cmdUser.ExecuteNonQuery();
 
             db.Close();
+        }
+
+        public static List<int> GetEmailToSendForLowStock(int recAmount, string adrese)
+        {
+            List<int> emails = new List<int>();
+
+
+            DBConnection db = new DBConnection();
+            db.Connect();
+            SqlCommand countCmd = new SqlCommand("Select count(id) from stock where stock.count < "+
+"@rec_amount", db.connection);
+            countCmd.Parameters.AddWithValue("@rec_amount", recAmount);
+            int resCount = 0;
+            SqlDataReader reader = countCmd.ExecuteReader();
+            while (reader.Read())
+            {
+                resCount = reader.GetInt32(0);
+            }
+            reader.Close();
+            if (resCount == 0)
+            {
+                return emails;
+            }
+            else
+            {
+                SqlTransaction transaction;
+
+                SqlCommand cmd = new SqlCommand();
+
+                transaction = db.connection.BeginTransaction();
+
+                cmd.Connection = db.connection;
+                cmd.Transaction = transaction;
+
+                try
+                {
+                    cmd.CommandText = "execute CreateEmailsForLowStock @recAmount = @rec_amount, @adrese = @adresee";
+                    cmd.Parameters.AddWithValue("@rec_amount", recAmount);
+                    cmd.Parameters.AddWithValue("@adresee", adrese);
+                    cmd.ExecuteNonQuery();
+                    transaction.Commit();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Commit Exception Type: {0}", ex.GetType());
+                    Console.WriteLine("  Message: {0}", ex.Message);
+
+                    // Attempt to roll back the transaction.
+                    try
+                    {
+                        transaction.Rollback();
+                    }
+                    catch (Exception ex2)
+                    {
+                        // This catch block will handle any errors that may have occurred
+                        // on the server that would cause the rollback to fail, such as
+                        // a closed connection.
+                        Console.WriteLine("Rollback Exception Type: {0}", ex2.GetType());
+                        Console.WriteLine("  Message: {0}", ex2.Message);
+                    }
+                }
+            }
+            SqlCommand phonesCmd = new SqlCommand("Select id from email " +
+"where date = '1.1.1970'" , db.connection);
+            SqlDataReader phonesReader = phonesCmd.ExecuteReader();
+            while (phonesReader.Read())
+            {
+                int i = -1;
+                emails.Add(phonesReader.GetInt32(++i));
+            }
+            db.Close();
+
+
+            return emails;
         }
     }
 }

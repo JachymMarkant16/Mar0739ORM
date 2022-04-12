@@ -14,22 +14,48 @@ namespace ProjektDB.ORM
         {
             DBConnection db = new DBConnection();
 
+            SqlTransaction transaction;
             db.Connect();
+            transaction = db.connection.BeginTransaction();
 
-            SqlCommand cmdGame = new SqlCommand("INSERT INTO [dbo].[reservation] VALUES ( " +
-                "@date, @Length," +
-                " @add_info, @state, @game_id, @user_id)",
-                db.connection);
+            SqlCommand checkCmd = new SqlCommand("Select count(*) " +
+"from reservation " +
+"where user_id = @user_id  " +
+"and @date >= date and @date <= dateadd(minute, reservation.length, reservation.date)", db.connection);
+            checkCmd.Transaction = transaction;
+            checkCmd.Parameters.AddWithValue("@date", reservation.Date);
+            checkCmd.Parameters.AddWithValue("@user_id", reservation.User.Id);
+            SqlDataReader checkReader = checkCmd.ExecuteReader();
+            int checkCount = 0;
+            while (checkReader.Read())
+            {
+                int i = -1;
+                checkCount = checkReader.GetInt32(++i);
+            }
+            checkReader.Close();
+            if (checkCount == 0)
+            {
+                SqlCommand cmdGame = new SqlCommand("INSERT INTO [dbo].[reservation] VALUES ( " +
+                    "@date, @Length," +
+                    " @add_info, @state, @game_id, @user_id)",
+                    db.connection);
+                cmdGame.Transaction = transaction;
+                cmdGame.Parameters.AddWithValue("@date", reservation.Date);
+                cmdGame.Parameters.AddWithValue("@Length", reservation.Length);
+                cmdGame.Parameters.AddWithValue("@add_info", reservation.AddInfo);
+                cmdGame.Parameters.AddWithValue("@state", reservation.State);
+                cmdGame.Parameters.AddWithValue("@game_id", reservation.Game.Id);
+                cmdGame.Parameters.AddWithValue("@user_id", reservation.User.Id);
 
-            cmdGame.Parameters.AddWithValue("@date", reservation.Date);
-            cmdGame.Parameters.AddWithValue("@Length", reservation.Length);
-            cmdGame.Parameters.AddWithValue("@add_info", reservation.AddInfo);
-            cmdGame.Parameters.AddWithValue("@state", reservation.State);
-            cmdGame.Parameters.AddWithValue("@game_id", reservation.Game.Id);
-            cmdGame.Parameters.AddWithValue("@user_id", reservation.User.Id);
-
-            cmdGame.ExecuteNonQuery();
-
+                cmdGame.ExecuteNonQuery();
+                transaction.Commit();
+            }
+            else
+            {
+                transaction.Rollback();
+                db.Close();
+                throw new Exception("Uz existuje rezervace");
+            }
             db.Close();
         }
         public static void UpdateReservation(Reservation reservation)
@@ -37,10 +63,10 @@ namespace ProjektDB.ORM
             DBConnection db = new DBConnection();
 
             db.Connect();
-                SqlCommand cmdGame = new SqlCommand("UPDATE [dbo].[reservation] SET " +
-                    "date = @date, length = @Length," +
-                    "add_info = @add_info,state = @state,game_id = @game_id,user_id =  @user_id where id = @id",
-                    db.connection);
+            SqlCommand cmdGame = new SqlCommand("UPDATE [dbo].[reservation] SET " +
+                "date = @date, length = @Length," +
+                "add_info = @add_info,state = @state,game_id = @game_id,user_id =  @user_id where id = @id",
+                db.connection);
 
             cmdGame.Parameters.AddWithValue("@date", reservation.Date);
             cmdGame.Parameters.AddWithValue("@Length", reservation.Length);
@@ -165,22 +191,76 @@ namespace ProjektDB.ORM
             cmd.ExecuteNonQuery();
             db.Close();
         }
-        public static List<int> CheckNotPaidReservations()
+        public static List<string> CheckNotPaidReservations()
         {
-            List<int> phones = new List<int>();
+            List<string> phones = new List<string>();
             DBConnection db = new DBConnection();
             db.Connect();
             SqlCommand countCmd = new SqlCommand("Select count(id) from reservation " +
-"where datum < Date(CURRENT_TIMESTAMP)" +
-"and state != \'Hotová\' and state != \'Propadlá\'", db.connection);
-            int resCount;
+"where [dbo].Reservation.date < CURRENT_TIMESTAMP " +
+"and [dbo].Reservation.state != 'Hotová' and [dbo].Reservation.state != 'Propadlá'", db.connection);
+            int resCount = 0;
             SqlDataReader reader = countCmd.ExecuteReader();
             while (reader.Read())
             {
-                resCount  = reader.GetInt32(0);
+                resCount = reader.GetInt32(0);
             }
+            reader.Close();
+            if (resCount == 0)
+            {
+                return phones;
+            }
+            else
+            {
+                SqlTransaction transaction;
 
-                db.Close();
+                SqlCommand cmd = new SqlCommand();
+
+                transaction = db.connection.BeginTransaction();
+
+                cmd.Connection = db.connection;
+                cmd.Transaction = transaction;
+
+                try
+                {
+                    cmd.CommandText = "EXEC CreateRecieptsFromReservations";
+                    cmd.ExecuteNonQuery();
+                    transaction.Commit();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Commit Exception Type: {0}", ex.GetType());
+                    Console.WriteLine("  Message: {0}", ex.Message);
+
+                    // Attempt to roll back the transaction.
+                    try
+                    {
+                        transaction.Rollback();
+                    }
+                    catch (Exception ex2)
+                    {
+                        // This catch block will handle any errors that may have occurred
+                        // on the server that would cause the rollback to fail, such as
+                        // a closed connection.
+                        Console.WriteLine("Rollback Exception Type: {0}", ex2.GetType());
+                        Console.WriteLine("  Message: {0}", ex2.Message);
+                    }
+                }
+            }
+            SqlCommand phonesCmd = new SqlCommand("Select [dbo].Game.price*0.75 as price, phone " +
+"from reservation " +
+"inner join [dbo].[User] on [dbo].[User].id = reservation.user_id " +
+"inner join [dbo].Game on [dbo].[Game].id = reservation.game_id " +
+"where reservation.date < CURRENT_TIMESTAMP " +
+"and reservation.state != \'Hotová\' and reservation.state != \'Propadlá\'", db.connection);
+            SqlDataReader phonesReader = phonesCmd.ExecuteReader();
+            while (phonesReader.Read())
+            {
+                int i = -1;
+                phonesReader.GetDecimal(++i);
+                phones.Add(phonesReader.GetString(++i));
+            }
+            db.Close();
             return phones;
         }
 
